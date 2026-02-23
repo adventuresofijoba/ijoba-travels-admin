@@ -42,7 +42,13 @@ const sidebarItems = [
   },
 ];
 
-export function AppSidebar({ className }: { className?: string }) {
+export function AppSidebar({
+  className,
+  onNavigate,
+}: {
+  className?: string;
+  onNavigate?: () => void;
+}) {
   const { signOut } = useAuth();
   const pathname = usePathname();
 
@@ -54,7 +60,11 @@ export function AppSidebar({ className }: { className?: string }) {
       )}
     >
       <div className="flex items-center border-b border-black/10 px-4 h-15">
-        <Link href="/" className="w-max gap-2 font-semibold">
+        <Link
+          href="/"
+          className="w-max gap-2 font-semibold"
+          onClick={onNavigate}
+        >
           <img
             src="/logo-black.webp"
             alt="Ijoba Admin"
@@ -68,6 +78,7 @@ export function AppSidebar({ className }: { className?: string }) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 transition-all",
                 (
