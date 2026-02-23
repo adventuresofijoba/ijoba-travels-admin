@@ -42,12 +42,17 @@ const sidebarItems = [
   },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ className }: { className?: string }) {
   const { signOut } = useAuth();
   const pathname = usePathname();
 
   return (
-    <div className="hidden sm:grid grid-rows-[auto_1fr_auto] h-full overflow-hidden w-64 border-r border-black/10 bg-[#F5E8C7]">
+    <div
+      className={cn(
+        "grid grid-rows-[auto_1fr_auto] h-full overflow-hidden w-64 border-r border-black/10 bg-[#F5E8C7]",
+        className
+      )}
+    >
       <div className="flex items-center border-b border-black/10 px-4 h-15">
         <Link href="/" className="w-max gap-2 font-semibold">
           <img
