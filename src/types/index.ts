@@ -44,7 +44,7 @@ export interface Inquiry {
   email: string;
   phone_number: string;
   inquiry_type: "contact" | "custom_package" | "package_reserve" | "newsletter";
-  status: "new" | "contacted" | "closed";
+  status: "resolved" | "unresolved";
   message: string;
   preferred_destination?: string;
   travel_style?: string;

@@ -1,14 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -33,28 +25,76 @@ import {
   Calendar,
   MessageSquare,
   Eye,
+  Clock,
+  MoreVertical,
+  CheckCheck,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@radix-ui/react-dropdown-menu";
 
 export default function FormsPage() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"resolved" | "unresolved">(
+    "unresolved"
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const ITEMS_PER_PAGE = 12;
 
-  const fetchInquiries = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("inquiries")
-      .select("*")
-      .order("created_at", { ascending: false });
+  const fetchInquiries = async (page: number, showLoading = true) => {
+    if (showLoading) setLoading(true);
+    const from = (page - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    let query = supabase.from("inquiries").select("*", { count: "exact" });
+
+    if (statusFilter) {
+      query = query.eq("status", statusFilter);
+    }
+
+    const { data, count, error } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) {
       toast.error("Failed to load inquiries");
       console.error(error);
     } else {
       setInquiries(data || []);
+      if (count !== null) {
+        setTotalPages(Math.ceil(count / ITEMS_PER_PAGE));
+      }
     }
-    setLoading(false);
+    if (showLoading) setLoading(false);
+  };
+
+  const handleStatusChange = async (
+    inquiry: Inquiry,
+    newStatus: "resolved" | "unresolved"
+  ) => {
+    const { error } = await supabase
+      .from("inquiries")
+      .update({ status: newStatus })
+      .eq("id", inquiry.id);
+
+    if (error) {
+      toast.error("Failed to update status");
+    } else {
+      toast.success("Status updated");
+      fetchInquiries(currentPage, false);
+      if (selectedInquiry && selectedInquiry.id === inquiry.id) {
+        setSelectedInquiry({ ...selectedInquiry, status: newStatus });
+      }
+    }
   };
 
   const handleViewDetails = (inquiry: Inquiry) => {
@@ -63,95 +103,215 @@ export default function FormsPage() {
   };
 
   useEffect(() => {
-    fetchInquiries();
-  }, []);
+    fetchInquiries(currentPage);
+  }, [currentPage, statusFilter]);
 
   return (
-    <div className="grid grid-rows-[auto_1fr_auto] gap-5 px-5 py-5 sm:py-10 overflow-y-auto custom-scrollbar">
+    <div className="grid grid-rows-[auto_1fr_auto] items-start gap-5 px-5 py-5 sm:py-10 overflow-y-auto custom-scrollbar">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold md:text-2xl">Forms</h1>
+        <div className="flex gap-2">
+          <Button
+            size={"sm"}
+            variant={statusFilter === "unresolved" ? "default" : "outline"}
+            onClick={() => {
+              setStatusFilter("unresolved");
+              setCurrentPage(1);
+            }}
+          >
+            Unresolved
+          </Button>
+          <Button
+            size={"sm"}
+            variant={statusFilter === "resolved" ? "default" : "outline"}
+            onClick={() => {
+              setStatusFilter("resolved");
+              setCurrentPage(1);
+            }}
+          >
+            Resolved
+          </Button>
+        </div>
       </div>
 
-      <div className="rounded-md border border-black/10 h-max">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
-                  Loading...
-                </TableCell>
-              </TableRow>
-            ) : inquiries.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
-                  No inquiries found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              inquiries.map((inq) => (
-                <TableRow key={inq.id}>
-                  <TableCell className="whitespace-nowrap">
-                    {format(new Date(inq.created_at), "MMM d, yyyy")}
-                    <div className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(inq.created_at), {
-                        addSuffix: true,
-                      })}
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {inq.full_name}
-                    {inq.phone_number && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        {inq.phone_number}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>{inq.email}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        inq.inquiry_type === "custom_package"
-                          ? "default"
-                          : inq.inquiry_type === "package_reserve"
-                          ? "outline"
-                          : "secondary"
-                      }
-                      className="whitespace-nowrap"
-                    >
-                      {inq.inquiry_type === "custom_package"
-                        ? "Custom Trip"
-                        : inq.inquiry_type === "package_reserve"
-                        ? "Package Reserve"
-                        : inq.inquiry_type === "newsletter"
-                        ? "Newsletter"
-                        : "Contact"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
+      {loading ? (
+        <div className="grid place-content-center min-h-50">Loading...</div>
+      ) : inquiries.length === 0 ? (
+        <div className="grid place-content-center min-h-50 text-muted-foreground">
+          No inquiries found.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-10">
+          {inquiries.map((inq) => (
+            <div
+              key={inq.id}
+              className="min-h-40 w-full p-5 bg-[#F5E8C7] rounded-md grid gap-5 grid-rows-[auto_1fr_auto] relative"
+            >
+              <div className="absolute top-2 right-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      size="sm"
-                      onClick={() => handleViewDetails(inq)}
+                      className="h-8 w-8 p-0 bg-white/50 cursor-pointer hover:bg-white/80"
                     >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View
+                      <span className="sr-only">Open menu</span>
+                      <MoreVertical className="h-4 w-4" />
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="bg-[#F8EFD8] rounded-sm p-2 mt-2 space-y-1 z-10 shadow-lg border border-black/5"
+                  >
+                    <DropdownMenuItem
+                      onClick={() =>
+                        handleStatusChange(
+                          inq,
+                          inq.status === "resolved" ? "unresolved" : "resolved"
+                        )
+                      }
+                      className="cursor-pointer flex gap-2 items-center px-2 py-1.5 rounded-sm hover:bg-black/5 text-sm outline-none"
+                    >
+                      <CheckCheck className="w-4 h-4" />
+                      {inq.status === "resolved"
+                        ? "Mark as Unresolved"
+                        : "Mark as Resolved"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleViewDetails(inq)}
+                      className="cursor-pointer flex gap-2 items-center px-2 py-1.5 rounded-sm hover:bg-black/5 text-sm outline-none"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Details
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="grid gap-2">
+                <div className="rounded-full border border-black/10 p-1 w-max">
+                  <span className="w-10 h-10 rounded-full bg-black grid place-content-center font-bold text-white text-sm">
+                    {inq.full_name
+                      ? inq.full_name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2)
+                      : "??"}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-medium px-3 py-1 rounded-sm bg-black/5">
+                    {inq.inquiry_type === "custom_package"
+                      ? "Custom Trip"
+                      : inq.inquiry_type === "package_reserve"
+                      ? "Package Reserve"
+                      : inq.inquiry_type === "newsletter"
+                      ? "Newsletter"
+                      : "Contact"}
+                  </span>
+                  <div
+                    className={`text-xs font-medium px-2 py-1 rounded-sm border flex items-center gap-1 ${
+                      inq.status === "resolved"
+                        ? "border-green-600/20 text-green-700 bg-green-50"
+                        : "border-red-600/20 text-red-700 bg-red-50"
+                    }`}
+                  >
+                    {inq.status === "resolved" ? (
+                      <CheckCheck className="w-3 h-3" />
+                    ) : (
+                      <Clock className="w-3 h-3" />
+                    )}
+                    {inq.status === "resolved" ? "Resolved" : "Unresolved"}
+                  </div>
+                </div>
+              </div>
+              <div className="grid self-start gap-2">
+                {/* Name */}
+                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
+                  <span className="grid place-content-center w-6 h-6 rounded-full bg-black/10 p-1.5">
+                    <User className="w-full text-black" />
+                  </span>
+                  <div className="grid">
+                    <span className="text-xs text-black/50">Name</span>
+                    <span className="text-sm font-medium text-black truncate">
+                      {inq.full_name}
+                    </span>
+                  </div>
+                </div>
+                {/* Email */}
+                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
+                  <span className="grid place-content-center w-6 h-6 rounded-full bg-black/10 p-1.5">
+                    <Mail className="w-full text-black" />
+                  </span>
+                  <div className="grid">
+                    <span className="text-xs text-black/50">Email</span>
+                    <span
+                      className="text-sm font-medium text-black truncate"
+                      title={inq.email}
+                    >
+                      {inq.email}
+                    </span>
+                  </div>
+                </div>
+                {/* Phone Number */}
+                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
+                  <span className="grid place-content-center w-6 h-6 rounded-full bg-black/10 p-1.5">
+                    <Phone className="w-full text-black" />
+                  </span>
+                  <div className="grid">
+                    <span className="text-xs text-black/50">Phone Number</span>
+                    <span className="text-sm font-medium text-black">
+                      {inq.phone_number || "N/A"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-flow-col items-center justify-between font-medium text-xs border-t border-black/10 pt-5 mt-auto">
+                <div className="flex items-center gap-1 text-black/60">
+                  <Calendar className="w-4 h-4" />
+                  <span>{format(new Date(inq.created_at), "MMM d, yyyy")}</span>
+                </div>
+                <div className="flex items-center gap-1 text-black/60">
+                  <Clock className="w-4 h-4" />
+                  <span>
+                    {formatDistanceToNow(new Date(inq.created_at), {
+                      addSuffix: true,
+                    })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center justify-end space-x-2 mx-auto mt-2.5 sm:mt-5">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1 || loading}
+          className="border-black/10 bg-transparent text-[#2D2D2D] hover:bg-black/5 disabled:opacity-50"
+        >
+          <ChevronLeft className="h-4 w-4 mr-2" />
+          Previous
+        </Button>
+        <div className="text-sm font-medium text-[#2D2D2D]">
+          Page {currentPage} of {totalPages}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+          }
+          disabled={currentPage === totalPages || loading}
+          className="border-black/10 bg-transparent text-[#2D2D2D] hover:bg-black/5 disabled:opacity-50"
+        >
+          Next
+          <ChevronRight className="h-4 w-4 ml-2" />
+        </Button>
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
