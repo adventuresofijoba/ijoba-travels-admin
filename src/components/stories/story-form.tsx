@@ -253,7 +253,7 @@ export function StoryForm({ onSuccess, defaultValues, id }: StoryFormProps) {
             control={form.control}
             name="is_published"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border border-black/10 p-4">
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Publish Story</FormLabel>
                 </div>
@@ -268,9 +268,11 @@ export function StoryForm({ onSuccess, defaultValues, id }: StoryFormProps) {
           />
 
           {form.watch("is_published") && (
-            <div className="flex flex-row items-center justify-between rounded-lg border p-4 bg-muted/50">
+            <div className="flex flex-row items-center justify-between rounded-lg border border-black/10 p-4">
               <div className="space-y-0.5">
-                <FormLabel className="text-base">Notify Subscribers</FormLabel>
+                <span className="text-base font-medium">
+                  Notify Subscribers
+                </span>
                 <div className="text-sm text-muted-foreground">
                   Send an email notification to all newsletter subscribers.
                 </div>

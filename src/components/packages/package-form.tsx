@@ -171,23 +171,37 @@ export function PackageForm({
         }
       }
 
-      const submissionData = {
-        ...data,
+      const matchedDestination = destinations.find(
+        (d) =>
+          d.name.trim().toLowerCase() === data.destination.trim().toLowerCase()
+      );
+
+      const basePayload: any = {
+        title: data.title,
+        slug: data.slug,
+        description: data.description,
+        price: data.price,
+        duration_days: data.duration_days,
         image_urls: imageUrls,
+        is_featured: data.is_featured,
+        timeline: data.timeline,
+        features: data.features,
       };
+
+      if (matchedDestination) {
+        basePayload.destination_id = matchedDestination.id;
+      }
 
       if (id) {
         const { error } = await supabase
           .from("packages")
-          .update(submissionData)
+          .update(basePayload)
           .eq("id", id);
 
         if (error) throw error;
         toast.success("Package updated successfully");
       } else {
-        const { error } = await supabase
-          .from("packages")
-          .insert([submissionData]);
+        const { error } = await supabase.from("packages").insert([basePayload]);
 
         if (error) throw error;
         toast.success("Package created successfully");
