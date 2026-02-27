@@ -70,7 +70,32 @@ export default function PackagesPage() {
       toast.error("Failed to load packages");
       console.error(error);
     } else {
-      setPackages(data || []);
+      const pkgList = data || [];
+      const destIds = Array.from(
+        new Set(
+          pkgList
+            .map((p: any) => p.destination_id)
+            .filter((id: string | null | undefined) => !!id)
+        )
+      );
+
+      let destNameMap: Record<string, string> = {};
+      if (destIds.length > 0) {
+        const { data: dests } = await supabase
+          .from("destinations")
+          .select("id, name")
+          .in("id", destIds);
+        (dests || []).forEach((d) => {
+          destNameMap[d.id] = d.name;
+        });
+      }
+
+      const enriched = pkgList.map((p: any) => ({
+        ...p,
+        destination: p.destination || destNameMap[p.destination_id] || "",
+      }));
+
+      setPackages(enriched as any);
       if (count !== null) {
         setTotalPages(Math.ceil(count / ITEMS_PER_PAGE));
       }

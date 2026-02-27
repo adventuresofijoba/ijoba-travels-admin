@@ -15,7 +15,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
 import { supabase } from "@/lib/supabase";
@@ -27,7 +33,7 @@ import { Trash2, Plus } from "lucide-react";
 const packageSchema = z.object({
   title: z.string().min(2, "Title must be at least 2 characters"),
   slug: z.string().min(2, "Slug must be at least 2 characters"),
-  destination: z.string().min(1, "Destination is required"),
+  destination_id: z.string().min(1, "Destination is required"),
   description: z.string().optional(),
   price: z.coerce.number().min(0, "Price must be positive"),
   duration_days: z.coerce.number().min(1, "Duration must be at least 1 day"),
@@ -85,7 +91,7 @@ export function PackageForm({
     defaultValues: {
       title: defaultValues?.title || "",
       slug: defaultValues?.slug || "",
-      destination: defaultValues?.destination || "",
+      destination_id: (defaultValues as any)?.destination_id || "",
       description: defaultValues?.description || "",
       price: defaultValues?.price || 0,
       duration_days: defaultValues?.duration_days || 1,
@@ -171,11 +177,6 @@ export function PackageForm({
         }
       }
 
-      const matchedDestination = destinations.find(
-        (d) =>
-          d.name.trim().toLowerCase() === data.destination.trim().toLowerCase()
-      );
-
       const basePayload: any = {
         title: data.title,
         slug: data.slug,
@@ -188,8 +189,12 @@ export function PackageForm({
         features: data.features,
       };
 
-      if (matchedDestination) {
-        basePayload.destination_id = matchedDestination.id;
+      basePayload.destination_id = data.destination_id;
+
+      if (!basePayload.destination_id) {
+        toast.error("Please select a destination");
+        setLoading(false);
+        return;
       }
 
       if (id) {
@@ -262,12 +267,23 @@ export function PackageForm({
 
           <FormField
             control={form.control}
-            name="destination"
+            name="destination_id"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Destination</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Kyoto, Japan" {...field} />
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a destination" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {destinations.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -310,11 +326,10 @@ export function PackageForm({
               <FormItem>
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <RichTextEditor
+                  <Textarea
+                    placeholder="Describe the package..."
                     value={field.value || ""}
                     onChange={field.onChange}
-                    placeholder="Describe the package..."
-                    onImageUpload={uploadImage}
                   />
                 </FormControl>
                 <FormMessage />
