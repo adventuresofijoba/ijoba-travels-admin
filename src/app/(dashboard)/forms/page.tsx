@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
 import { Inquiry } from "@/types";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ import {
   CheckCheck,
   ChevronLeft,
   ChevronRight,
+  Filter,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -43,9 +45,9 @@ export default function FormsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<"resolved" | "unresolved">(
-    "unresolved"
-  );
+  const [statusFilter, setStatusFilter] = useState<
+    "resolved" | "unresolved" | null
+  >(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const ITEMS_PER_PAGE = 12;
@@ -110,32 +112,111 @@ export default function FormsPage() {
     <div className="grid grid-rows-[auto_1fr_auto] items-start gap-5 px-5 py-5 sm:py-10 overflow-y-auto custom-scrollbar">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold md:text-2xl">Forms</h1>
-        <div className="flex gap-2">
-          <Button
-            size={"sm"}
-            variant={statusFilter === "unresolved" ? "default" : "outline"}
-            onClick={() => {
-              setStatusFilter("unresolved");
-              setCurrentPage(1);
-            }}
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex items-center gap-2 cursor-pointer text-lg ml-auto">
+            <Filter size={16} />
+            Filter
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="border border-black/10 rounded-md bg-[#F5E8C7] z-30 py-1 shadow-md mt-1"
           >
-            Unresolved
-          </Button>
-          <Button
-            size={"sm"}
-            variant={statusFilter === "resolved" ? "default" : "outline"}
-            onClick={() => {
-              setStatusFilter("resolved");
-              setCurrentPage(1);
-            }}
-          >
-            Resolved
-          </Button>
-        </div>
+            <div className="flex items-center gap-2 px-2 py-1">
+              <input
+                type="radio"
+                name="formsStatusFilter"
+                id="forms-all"
+                checked={statusFilter === null}
+                onChange={() => {
+                  setStatusFilter(null);
+                  setCurrentPage(1);
+                }}
+                className="cursor-pointer w-4 h-4 appearance-none rounded-full border border-black checked:bg-black checked:border-black"
+              />
+              <label htmlFor="forms-all" className="cursor-pointer">
+                All
+              </label>
+            </div>
+            <div className="flex items-center gap-2 px-2 py-1">
+              <input
+                type="radio"
+                name="formsStatusFilter"
+                id="forms-resolved"
+                checked={statusFilter === "resolved"}
+                onChange={() => {
+                  setStatusFilter("resolved");
+                  setCurrentPage(1);
+                }}
+                className="cursor-pointer w-4 h-4 appearance-none rounded-full border border-black checked:bg-black checked:border-black"
+              />
+              <label htmlFor="forms-resolved" className="cursor-pointer">
+                Resolved
+              </label>
+            </div>
+            <div className="flex items-center gap-2 px-2 py-1">
+              <input
+                type="radio"
+                name="formsStatusFilter"
+                id="forms-unresolved"
+                checked={statusFilter === "unresolved"}
+                onChange={() => {
+                  setStatusFilter("unresolved");
+                  setCurrentPage(1);
+                }}
+                className="cursor-pointer w-4 h-4 appearance-none rounded-full border border-black checked:bg-black checked:border-black"
+              />
+              <label htmlFor="forms-unresolved" className="cursor-pointer">
+                Unresolved
+              </label>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {loading ? (
-        <div className="grid place-content-center min-h-50">Loading...</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-10">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="min-h-40 w-full p-5 bg-[#F5E8C7] rounded-md grid gap-5 grid-rows-[auto_1fr_auto]"
+            >
+              <div className="grid gap-2">
+                <Skeleton className="h-6 w-24 bg-black/10" />
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-20 bg-black/10" />
+                  <Skeleton className="h-5 w-20 bg-black/10" />
+                </div>
+              </div>
+              <div className="grid gap-3">
+                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
+                  <Skeleton className="h-6 w-6 rounded-full bg-black/10" />
+                  <div className="grid gap-1">
+                    <Skeleton className="h-3 w-16 bg-black/10" />
+                    <Skeleton className="h-4 w-32 bg-black/10" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
+                  <Skeleton className="h-6 w-6 rounded-full bg-black/10" />
+                  <div className="grid gap-1">
+                    <Skeleton className="h-3 w-16 bg-black/10" />
+                    <Skeleton className="h-4 w-40 bg-black/10" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
+                  <Skeleton className="h-6 w-6 rounded-full bg-black/10" />
+                  <div className="grid gap-1">
+                    <Skeleton className="h-3 w-20 bg-black/10" />
+                    <Skeleton className="h-4 w-24 bg-black/10" />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-flow-col items-center justify-between border-t border-black/10 pt-5 mt-auto">
+                <Skeleton className="h-4 w-24 bg-black/10" />
+                <Skeleton className="h-4 w-24 bg-black/10" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : inquiries.length === 0 ? (
         <div className="grid place-content-center min-h-50 text-muted-foreground">
           No inquiries found.

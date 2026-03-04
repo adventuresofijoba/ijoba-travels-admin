@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreVertical,
+  Filter,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -51,6 +52,9 @@ export default function DestinationsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<
+    "draft" | "published" | null
+  >(null);
   const ITEMS_PER_PAGE = 12;
 
   const fetchDestinations = async (page: number, showLoading = true) => {
@@ -58,12 +62,17 @@ export default function DestinationsPage() {
     const from = (page - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
-    const { data, count, error } = await supabase
+    let query = supabase
       .from("destinations")
       .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
-      .order("name", { ascending: true })
-      .range(from, to);
+      .order("name", { ascending: true });
+
+    if (statusFilter) {
+      query = query.eq("is_active", statusFilter === "published");
+    }
+
+    const { data, count, error } = await query.range(from, to);
 
     if (error) {
       toast.error("Failed to load destinations");
@@ -79,7 +88,7 @@ export default function DestinationsPage() {
 
   useEffect(() => {
     fetchDestinations(currentPage);
-  }, [currentPage]);
+  }, [currentPage, statusFilter]);
 
   const handleEdit = (destination: Destination) => {
     router.push(`/destinations/${destination.id}/edit`);
@@ -105,13 +114,74 @@ export default function DestinationsPage() {
 
   return (
     <div className="grid grid-rows-[auto_1fr_auto] gap-5 px-5 py-5 sm:py-10 overflow-y-auto custom-scrollbar">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold md:text-2xl">Destinations</h1>
-        <Link href="/destinations/create">
-          <Button size={"sm"}>
-            <Plus className="mr-2 h-4 w-4" /> Add Destination
-          </Button>
-        </Link>
+      <div className="grid gap-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold md:text-2xl">Destinations</h1>
+          <Link href="/destinations/create">
+            <Button size={"sm"}>
+              <Plus className="mr-2 h-4 w-4" /> Add Destination
+            </Button>
+          </Link>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex items-center gap-2 cursor-pointer text-lg ml-auto">
+            <Filter size={16} />
+            Filter
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="border border-black/10 rounded-md bg-[#F5E8C7] z-30 py-1 shadow-md mt-1"
+          >
+            <div className="flex items-center gap-2 px-2 py-1">
+              <input
+                type="radio"
+                name="statusFilter"
+                id="all"
+                checked={statusFilter === null}
+                onChange={() => {
+                  setStatusFilter(null);
+                  setCurrentPage(1);
+                }}
+                className="cursor-pointer w-4 h-4 appearance-none rounded-full border border-black checked:bg-black checked:border-black"
+              />
+              <label htmlFor="all" className="cursor-pointer">
+                All
+              </label>
+            </div>
+            <div className="flex items-center gap-2 px-2 py-1">
+              <input
+                type="radio"
+                name="statusFilter"
+                id="draft"
+                checked={statusFilter === "draft"}
+                onChange={() => {
+                  setStatusFilter("draft");
+                  setCurrentPage(1);
+                }}
+                className="cursor-pointer w-4 h-4 appearance-none rounded-full border border-black checked:bg-black checked:border-black"
+              />
+              <label htmlFor="draft" className="cursor-pointer">
+                Draft
+              </label>
+            </div>
+            <div className="flex items-center gap-2 px-2 py-1">
+              <input
+                type="radio"
+                name="statusFilter"
+                id="published"
+                checked={statusFilter === "published"}
+                onChange={() => {
+                  setStatusFilter("published");
+                  setCurrentPage(1);
+                }}
+                className="cursor-pointer w-4 h-4 appearance-none rounded-full border border-black checked:bg-black checked:border-black"
+              />
+              <label htmlFor="published" className="cursor-pointer">
+                Published
+              </label>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 content-start gap-5">

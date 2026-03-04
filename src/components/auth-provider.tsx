@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useRouter, usePathname } from "next/navigation";
+import { PageLoader } from "@/components/ui/loader";
 
 interface AuthContextType {
   user: User | null;
@@ -69,13 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ user, session, loading, signOut }}>
-      {!loading ? (
-        children
-      ) : (
-        <div className="flex h-screen w-full items-center justify-center">
-          Loading...
-        </div>
-      )}
+      {!loading ? children : <PageLoader />}
     </AuthContext.Provider>
   );
 }

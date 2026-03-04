@@ -18,8 +18,8 @@ import {
   MoreVertical,
   MapPin,
   Clock,
-  DollarSign,
   Package as PackageIcon,
+  Filter,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -53,6 +53,9 @@ export default function PackagesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<
+    "featured" | "not_featured" | null
+  >(null);
   const ITEMS_PER_PAGE = 12;
 
   const fetchPackages = async (page: number, showLoading = true) => {
@@ -60,11 +63,16 @@ export default function PackagesPage() {
     const from = (page - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
-    const { data, count, error } = await supabase
+    let query = supabase
       .from("packages")
       .select("*", { count: "exact" })
-      .order("title", { ascending: true })
-      .range(from, to);
+      .order("title", { ascending: true });
+
+    if (statusFilter) {
+      query = query.eq("is_featured", statusFilter === "featured");
+    }
+
+    const { data, count, error } = await query.range(from, to);
 
     if (error) {
       toast.error("Failed to load packages");
@@ -105,7 +113,7 @@ export default function PackagesPage() {
 
   useEffect(() => {
     fetchPackages(currentPage);
-  }, [currentPage]);
+  }, [currentPage, statusFilter]);
 
   const handleEdit = (pkg: Package) => {
     router.push(`/packages/${pkg.id}/edit`);
@@ -131,16 +139,78 @@ export default function PackagesPage() {
 
   return (
     <div className="grid grid-rows-[auto_1fr_auto] gap-5 px-5 py-5 sm:py-10 overflow-y-auto custom-scrollbar">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold md:text-2xl">Packages</h1>
-        <Link href="/packages/create">
-          <Button size={"sm"}>
-            <Plus className="mr-2 h-4 w-4" /> Add Package
-          </Button>
-        </Link>
+      <div className="grid gap-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold md:text-2xl">Packages</h1>
+          <Link href="/packages/create">
+            <Button size={"sm"}>
+              <Plus className="mr-2 h-4 w-4" /> Add Package
+            </Button>
+          </Link>
+        </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex items-center gap-2 cursor-pointer text-lg ml-auto">
+            <Filter size={16} />
+            Filter
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="border border-black/10 rounded-md bg-[#F5E8C7] z-30 py-1 shadow-md mt-1"
+          >
+            <div className="flex items-center gap-2 px-2 py-1">
+              <input
+                type="radio"
+                name="packageStatusFilter"
+                id="pkg-all"
+                checked={statusFilter === null}
+                onChange={() => {
+                  setStatusFilter(null);
+                  setCurrentPage(1);
+                }}
+                className="cursor-pointer w-4 h-4 appearance-none rounded-full border border-black checked:bg-black checked:border-black"
+              />
+              <label htmlFor="pkg-all" className="cursor-pointer">
+                All
+              </label>
+            </div>
+            <div className="flex items-center gap-2 px-2 py-1">
+              <input
+                type="radio"
+                name="packageStatusFilter"
+                id="pkg-featured"
+                checked={statusFilter === "featured"}
+                onChange={() => {
+                  setStatusFilter("featured");
+                  setCurrentPage(1);
+                }}
+                className="cursor-pointer w-4 h-4 appearance-none rounded-full border border-black checked:bg-black checked:border-black"
+              />
+              <label htmlFor="pkg-featured" className="cursor-pointer">
+                Featured
+              </label>
+            </div>
+            <div className="flex items-center gap-2 px-2 py-1">
+              <input
+                type="radio"
+                name="packageStatusFilter"
+                id="pkg-not-featured"
+                checked={statusFilter === "not_featured"}
+                onChange={() => {
+                  setStatusFilter("not_featured");
+                  setCurrentPage(1);
+                }}
+                className="cursor-pointer w-4 h-4 appearance-none rounded-full border border-black checked:bg-black checked:border-black"
+              />
+              <label htmlFor="pkg-not-featured" className="cursor-pointer">
+                Not Featured
+              </label>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <div className="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 content-start gap-5">
+      <div className="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 content-start gap-5 mt-2">
         {loading ? (
           Array.from({ length: 8 }).map((_, i) => (
             <Card

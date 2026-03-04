@@ -494,7 +494,11 @@ export function PackageForm({
                       <FormItem>
                         <FormLabel>Date</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. March 23, 2025" {...field} />
+                          <Input
+                            type="date"
+                            {...field}
+                            min={new Date().toISOString().split("T")[0]}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
