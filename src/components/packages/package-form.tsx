@@ -23,17 +23,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
 import { Destination } from "@/types";
 import { Trash2, Plus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const packageSchema = z.object({
   title: z.string().min(2, "Title must be at least 2 characters"),
   slug: z.string().min(2, "Slug must be at least 2 characters"),
-  destination_id: z.string().min(1, "Destination is required"),
+  destination_ids: z
+    .array(z.string())
+    .min(1, "Select at least one destination"),
+  order_index: z
+    .union([z.number(), z.string(), z.undefined(), z.null()])
+    .optional()
+    .transform((val) => {
+      if (val === "" || val === undefined || val === null) return undefined;
+      const num = Number(val);
+      if (Number.isNaN(num)) return undefined;
+      return num;
+    }),
   description: z.string().optional(),
   price: z.coerce.number().min(0, "Price must be positive"),
   duration_days: z.coerce.number().min(1, "Duration must be at least 1 day"),
@@ -45,7 +58,7 @@ const packageSchema = z.object({
         date: z.string().min(1, "Date is required"),
         title: z.string().min(1, "Title is required"),
         description: z.string().min(1, "Description is required"),
-      })
+      }),
     )
     .optional(),
   features: z
@@ -53,7 +66,7 @@ const packageSchema = z.object({
       z.object({
         title: z.string().min(1, "Title is required"),
         points: z.array(z.string()).default([]),
-      })
+      }),
     )
     .optional(),
 });
@@ -73,25 +86,68 @@ export function PackageForm({
 }: PackageFormProps) {
   const [loading, setLoading] = useState(false);
   const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [highestOrder, setHighestOrder] = useState<number | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   useEffect(() => {
-    async function fetchDestinations() {
+    async function fetchData() {
       const { data } = await supabase
         .from("destinations")
         .select("*")
         .order("name");
-      if (data) setDestinations(data);
+      setDestinations(data || []);
+
+      const { data: maxOrder } = await supabase
+        .from("packages")
+        .select("order_index")
+        .order("order_index", { ascending: false })
+        .limit(1);
+      if (maxOrder && maxOrder.length > 0) {
+        setHighestOrder(maxOrder[0].order_index);
+      }
     }
-    fetchDestinations();
+    fetchData();
   }, []);
+
+  useEffect(() => {
+    async function fetchExistingMappings() {
+      if (!id) return;
+      try {
+        const { data, error } = await supabase
+          .from("package_destinations")
+          .select("destination_id")
+          .eq("package_id", id);
+        if (!error && Array.isArray(data)) {
+          const ids = data
+            .map((row: any) => row.destination_id)
+            .filter(Boolean);
+          if (ids.length > 0) {
+            form.setValue("destination_ids", ids);
+          }
+        }
+      } catch (_e) {
+        // ignore if mapping table doesn't exist
+      }
+    }
+    fetchExistingMappings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const form = useForm<PackageFormValues>({
     resolver: zodResolver(packageSchema) as any,
     defaultValues: {
       title: defaultValues?.title || "",
       slug: defaultValues?.slug || "",
-      destination_id: (defaultValues as any)?.destination_id || "",
+      destination_ids: Array.isArray((defaultValues as any)?.destination_ids)
+        ? ((defaultValues as any)?.destination_ids as string[])
+        : typeof (defaultValues as any)?.destination_id === "string" &&
+            (defaultValues as any)?.destination_id.length > 0
+          ? [(defaultValues as any)?.destination_id as string]
+          : [],
+      order_index:
+        typeof (defaultValues as any)?.order_index === "number"
+          ? ((defaultValues as any)?.order_index as number)
+          : undefined,
       description: defaultValues?.description || "",
       price: defaultValues?.price || 0,
       duration_days: defaultValues?.duration_days || 1,
@@ -164,7 +220,6 @@ export function PackageForm({
     try {
       let imageUrls = data.image_urls || [];
 
-      // Handle image upload if a file is selected
       if (imageFile) {
         try {
           const uploadedUrl = await uploadImage(imageFile);
@@ -173,7 +228,7 @@ export function PackageForm({
           console.error("Image upload failed:", uploadError);
           toast.error("Failed to upload image: " + uploadError.message);
           setLoading(false);
-          return; // Stop submission if image upload fails
+          return;
         }
       }
 
@@ -189,26 +244,91 @@ export function PackageForm({
         features: data.features,
       };
 
-      basePayload.destination_id = data.destination_id;
-
-      if (!basePayload.destination_id) {
-        toast.error("Please select a destination");
+      const selectedIds = data.destination_ids || [];
+      if (!selectedIds.length) {
+        toast.error("Please select at least one destination");
         setLoading(false);
         return;
       }
+      basePayload.destination_id = selectedIds[0];
+      // Ensure order_index is a clean number or null
+      if (typeof data.order_index === "number" && !Number.isNaN(data.order_index)) {
+        basePayload.order_index = data.order_index;
+      } else {
+        basePayload.order_index = null;
+      }
 
       if (id) {
-        const { error } = await supabase
+        let upd = await supabase
           .from("packages")
           .update(basePayload)
           .eq("id", id);
-
-        if (error) throw error;
+        if (upd.error) {
+          // Retry if order_index column is missing
+          if (/order_index/i.test(upd.error.message || "")) {
+            const retryPayload = { ...basePayload };
+            delete retryPayload.order_index;
+            upd = await supabase
+              .from("packages")
+              .update(retryPayload)
+              .eq("id", id);
+            if (upd.error) throw upd.error;
+          } else {
+            throw upd.error;
+          }
+        }
+        try {
+          await supabase
+            .from("package_destinations")
+            .delete()
+            .eq("package_id", id);
+          const rows = selectedIds.map((destId) => ({
+            package_id: id,
+            destination_id: destId,
+          }));
+          if (rows.length) {
+            await supabase.from("package_destinations").insert(rows);
+          }
+        } catch (_e) {}
         toast.success("Package updated successfully");
       } else {
-        const { error } = await supabase.from("packages").insert([basePayload]);
+        let inserted: any = null;
+        let ins = await supabase
+          .from("packages")
+          .insert([basePayload])
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (ins.error) {
+          // Retry if order_index column is missing
+          if (/order_index/i.test(ins.error.message || "")) {
+            const retryPayload = { ...basePayload };
+            delete retryPayload.order_index;
+            ins = await supabase
+              .from("packages")
+              .insert([retryPayload])
+              .select()
+              .single();
+            if (ins.error) throw ins.error;
+            inserted = ins.data;
+          } else {
+            throw ins.error;
+          }
+        } else {
+          inserted = ins.data;
+        }
+        const newId = inserted?.id;
+        if (newId) {
+          try {
+            const rows = selectedIds.map((destId) => ({
+              package_id: newId,
+              destination_id: destId,
+            }));
+            if (rows.length) {
+              await supabase.from("package_destinations").insert(rows);
+            }
+          } catch (_e) {}
+        }
         toast.success("Package created successfully");
       }
 
@@ -217,10 +337,10 @@ export function PackageForm({
       if (onSuccess) onSuccess();
     } catch (error: any) {
       toast.error(
-        `Error ${id ? "updating" : "creating"} package: ` + error.message
+        `Error ${id ? "updating" : "creating"} package: ` + error.message,
       );
       console.log(
-        `Error ${id ? "updating" : "creating"} package: ` + error.message
+        `Error ${id ? "updating" : "creating"} package: ` + error.message,
       );
     } finally {
       setLoading(false);
@@ -248,6 +368,27 @@ export function PackageForm({
             )}
           />
 
+          <div className="grid gap-3">
+            <div className="flex items-center justify-between">
+              <Label>Display Order (Number)</Label>
+              {highestOrder !== null && (
+                <span className="text-xs text-[#2D2D2D]/50">
+                  Highest: {highestOrder} (Next: {highestOrder + 1})
+                </span>
+              )}
+            </div>
+            <Input
+              type="number"
+              placeholder="e.g. 1"
+              {...form.register("order_index")}
+            />
+            {form.formState.errors.order_index && (
+              <p className="text-sm font-medium text-destructive">
+                {form.formState.errors.order_index.message}
+              </p>
+            )}
+          </div>
+
           <FormField
             control={form.control}
             name="slug"
@@ -267,24 +408,38 @@ export function PackageForm({
 
           <FormField
             control={form.control}
-            name="destination_id"
-            render={({ field }) => (
+            name="destination_ids"
+            render={() => (
               <FormItem>
-                <FormLabel>Destination</FormLabel>
-                <FormControl>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a destination" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {destinations.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormControl>
+                <FormLabel>Destinations</FormLabel>
+                <div className="grid gap-2">
+                  {destinations.map((d) => {
+                    const selected = (
+                      form.getValues("destination_ids") || []
+                    ).includes(d.id);
+                    return (
+                      <label key={d.id} className="flex items-center gap-2">
+                        <Checkbox
+                          checked={selected}
+                          onChange={(e) => {
+                            const checked = (e.target as HTMLInputElement)
+                              .checked;
+                            const current = new Set(
+                              form.getValues("destination_ids") || [],
+                            );
+                            if (checked) current.add(d.id);
+                            else current.delete(d.id);
+                            form.setValue(
+                              "destination_ids",
+                              Array.from(current),
+                            );
+                          }}
+                        />
+                        <span>{d.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
                 <FormMessage />
               </FormItem>
             )}

@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
@@ -28,6 +29,15 @@ const destinationSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   slug: z.string().min(2, "Slug must be at least 2 characters"),
   description: z.string().optional(),
+  order_index: z
+    .union([z.number(), z.string(), z.undefined(), z.null()])
+    .optional()
+    .transform((val) => {
+      if (val === "" || val === undefined || val === null) return undefined;
+      const num = Number(val);
+      if (Number.isNaN(num)) return undefined;
+      return num;
+    }),
   image_url: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   is_active: z.boolean(),
   experiences: z
@@ -35,7 +45,7 @@ const destinationSchema = z.object({
       z.object({
         name: z.string().min(1, "Experience name is required"),
         image_url: z.string().optional().or(z.literal("")),
-      })
+      }),
     )
     .optional(),
   why_visit_description: z.string().optional(),
@@ -66,6 +76,7 @@ export function DestinationForm({
   destinationId,
 }: DestinationFormProps) {
   const [loading, setLoading] = useState(false);
+  const [highestOrder, setHighestOrder] = useState<number | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [whyVisitImageFile, setWhyVisitImageFile] = useState<File | null>(null);
   const [experienceFiles, setExperienceFiles] = useState<{
@@ -77,10 +88,14 @@ export function DestinationForm({
   const [packages, setPackages] = useState<PackageOption[]>([]);
 
   const form = useForm<DestinationFormValues>({
-    resolver: zodResolver(destinationSchema),
+    resolver: zodResolver(destinationSchema) as any,
     defaultValues: defaultValues
       ? {
           ...defaultValues,
+          order_index:
+            typeof (defaultValues as any)?.order_index === "number"
+              ? ((defaultValues as any)?.order_index as number)
+              : undefined,
           description: defaultValues.description ?? "",
           image_url: defaultValues.image_url ?? "",
           experiences: defaultValues.experiences ?? [],
@@ -91,6 +106,7 @@ export function DestinationForm({
       : {
           name: "",
           slug: "",
+          order_index: undefined,
           description: "",
           image_url: "",
           is_active: true,
@@ -102,7 +118,7 @@ export function DestinationForm({
   });
 
   useEffect(() => {
-    if (defaultValues) {
+    if (defaultValues && !form.formState.isDirty) {
       console.log("DestinationForm received defaultValues:", defaultValues);
 
       // Ensure all fields are properly reset with default values or empty defaults
@@ -126,7 +142,7 @@ export function DestinationForm({
       });
 
       const recommended_packages = Array.isArray(
-        defaultValues.recommended_packages
+        defaultValues.recommended_packages,
       )
         ? defaultValues.recommended_packages
         : [];
@@ -149,7 +165,7 @@ export function DestinationForm({
   });
 
   useEffect(() => {
-    async function fetchPackages() {
+    async function fetchData() {
       const { data, error } = await supabase
         .from("packages")
         .select("id, title")
@@ -157,14 +173,20 @@ export function DestinationForm({
 
       if (error) {
         console.error("Error fetching packages:", error);
-        toast.error("Failed to load packages");
-        return;
+      } else {
+        setPackages(data || []);
       }
 
-      setPackages(data || []);
+      const { data: maxOrder } = await supabase
+        .from("destinations")
+        .select("order_index")
+        .order("order_index", { ascending: false })
+        .limit(1);
+      if (maxOrder && maxOrder.length > 0) {
+        setHighestOrder(maxOrder[0].order_index);
+      }
     }
-
-    fetchPackages();
+    fetchData();
   }, []);
 
   // Watch name to auto-generate slug
@@ -185,7 +207,7 @@ export function DestinationForm({
 
   const handleImageChange = (
     e: React.ChangeEvent<HTMLInputElement>,
-    setFile: (file: File | null) => void
+    setFile: (file: File | null) => void,
   ) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
@@ -194,7 +216,7 @@ export function DestinationForm({
 
   const handleExperienceImageChange = (
     e: React.ChangeEvent<HTMLInputElement>,
-    index: number
+    index: number,
   ) => {
     if (e.target.files && e.target.files[0]) {
       setExperienceFiles((prev) => ({
@@ -251,7 +273,7 @@ export function DestinationForm({
         } catch (uploadError: any) {
           console.error("Why visit image upload failed:", uploadError);
           toast.error(
-            "Failed to upload why visit image: " + uploadError.message
+            "Failed to upload why visit image: " + uploadError.message,
           );
           return;
         }
@@ -267,35 +289,66 @@ export function DestinationForm({
           } catch (uploadError: any) {
             console.error(
               `Experience ${i + 1} image upload failed:`,
-              uploadError
+              uploadError,
             );
             toast.error(
               `Failed to upload experience ${i + 1} image: ` +
-                uploadError.message
+                uploadError.message,
             );
             return;
           }
         }
       }
 
-      const submissionData = {
-        ...data,
+      const submissionData: any = {
+        name: data.name,
+        slug: data.slug,
+        description: data.description,
+        is_active: data.is_active,
         image_url: imageUrl,
+        why_visit_description: data.why_visit_description,
         why_visit_image_url: whyVisitImageUrl,
         experiences: experiences,
+        recommended_packages: data.recommended_packages,
       };
+
+      // Ensure order_index is a clean number or null
+      if (
+        typeof data.order_index === "number" &&
+        !Number.isNaN(data.order_index)
+      ) {
+        submissionData.order_index = data.order_index;
+      } else {
+        submissionData.order_index = null;
+      }
 
       if (destinationId) {
         // Update existing destination
-        const { data: updatedData, error } = await supabase
+        let upd = await supabase
           .from("destinations")
           .update(submissionData)
           .eq("id", destinationId)
           .select()
           .single();
 
-        if (error) throw error;
-        resultData = updatedData;
+        if (upd.error) {
+          // Retry if order_index column is missing
+          if (/order_index/i.test(upd.error.message || "")) {
+            const retryData = { ...submissionData };
+            delete (retryData as any).order_index;
+            upd = await supabase
+              .from("destinations")
+              .update(retryData)
+              .eq("id", destinationId)
+              .select()
+              .single();
+            if (upd.error) throw upd.error;
+          } else {
+            throw upd.error;
+          }
+        }
+
+        resultData = upd.data;
         toast.success("Destination updated successfully");
         // Reset form with the submitted data to clear dirty state
         form.reset({
@@ -312,14 +365,29 @@ export function DestinationForm({
         setExperienceFiles({});
       } else {
         // Create new destination
-        const { data: newData, error } = await supabase
+        let ins = await supabase
           .from("destinations")
           .insert([submissionData])
           .select()
           .single();
 
-        if (error) throw error;
-        resultData = newData;
+        if (ins.error) {
+          // Retry if order_index column is missing
+          if (/order_index/i.test(ins.error.message || "")) {
+            const retryData = { ...submissionData };
+            delete (retryData as any).order_index;
+            ins = await supabase
+              .from("destinations")
+              .insert([retryData])
+              .select()
+              .single();
+            if (ins.error) throw ins.error;
+          } else {
+            throw ins.error;
+          }
+        }
+
+        resultData = ins.data;
         toast.success("Destination created successfully");
         form.reset();
         setImageFile(null);
@@ -331,11 +399,11 @@ export function DestinationForm({
     } catch (error: any) {
       toast.error(
         `Error ${destinationId ? "updating" : "creating"} destination: ` +
-          error.message
+          error.message,
       );
       console.log(
         `Error ${destinationId ? "updating" : "creating"} destination: ` +
-          error.message
+          error.message,
       );
     } finally {
       setLoading(false);
@@ -394,6 +462,27 @@ export function DestinationForm({
               </FormItem>
             )}
           />
+
+          <div className="grid gap-3">
+            <div className="flex items-center justify-between">
+              <Label>Display Order (Number)</Label>
+              {highestOrder !== null && (
+                <span className="text-xs text-[#2D2D2D]/50">
+                  Highest: {highestOrder} (Next: {highestOrder + 1})
+                </span>
+              )}
+            </div>
+            <Input
+              type="number"
+              placeholder="e.g. 1"
+              {...form.register("order_index")}
+            />
+            {form.formState.errors.order_index && (
+              <p className="text-sm font-medium text-destructive">
+                {form.formState.errors.order_index.message}
+              </p>
+            )}
+          </div>
 
           <FormField
             control={form.control}
@@ -543,7 +632,7 @@ export function DestinationForm({
                                         src={
                                           experienceFiles[index]
                                             ? URL.createObjectURL(
-                                                experienceFiles[index]
+                                                experienceFiles[index],
                                               )
                                             : field.value || ""
                                         }
@@ -661,8 +750,8 @@ export function DestinationForm({
                                       ])
                                     : field.onChange(
                                         field.value?.filter(
-                                          (value) => value !== pkg.id
-                                        )
+                                          (value) => value !== pkg.id,
+                                        ),
                                       );
                                 }}
                               />
@@ -720,8 +809,8 @@ export function DestinationForm({
             {loading
               ? "Saving..."
               : destinationId
-              ? "Update Destination"
-              : "Create Destination"}
+                ? "Update Destination"
+                : "Create Destination"}
           </Button>
         </div>
       </form>

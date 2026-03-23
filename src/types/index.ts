@@ -13,6 +13,7 @@ export interface Destination {
   why_visit_description?: string;
   why_visit_image_url?: string;
   recommended_packages?: string[];
+  order_index?: number;
 }
 
 export interface Package {
@@ -35,6 +36,7 @@ export interface Package {
     title: string;
     points: string[];
   }[];
+  order_index?: number;
 }
 
 export interface Inquiry {

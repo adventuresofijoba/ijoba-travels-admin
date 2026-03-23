@@ -62,26 +62,45 @@ export default function DestinationsPage() {
     const from = (page - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
-    let query = supabase
-      .from("destinations")
-      .select("*", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .order("name", { ascending: true });
+    let base = supabase.from("destinations").select("*", { count: "exact" });
 
-    if (statusFilter) {
-      query = query.eq("is_active", statusFilter === "published");
+    // Try order by order_index ascending then name; fallback to created_at if column missing
+    let data: any[] | null = null;
+    let count: number | null = null;
+    {
+      let q = base;
+      if (statusFilter) {
+        q = q.eq("is_active", statusFilter === "published");
+      }
+      const res = await q
+        .order("order_index", { ascending: true, nullsFirst: false })
+        .order("name", { ascending: true })
+        .range(from, to);
+      if (res.error && /order_index/i.test(res.error.message || "")) {
+        let q2 = base;
+        if (statusFilter) {
+          q2 = q2.eq("is_active", statusFilter === "published");
+        }
+        const res2 = await q2
+          .order("created_at", { ascending: false })
+          .order("name", { ascending: true })
+          .range(from, to);
+        data = res2.data || [];
+        count = res2.count ?? null;
+      } else if (res.error) {
+        toast.error("Failed to load destinations");
+        console.error(res.error);
+        if (showLoading) setLoading(false);
+        return;
+      } else {
+        data = res.data || [];
+        count = res.count ?? null;
+      }
     }
 
-    const { data, count, error } = await query.range(from, to);
-
-    if (error) {
-      toast.error("Failed to load destinations");
-      console.error(error);
-    } else {
-      setDestinations(data || []);
-      if (count !== null) {
-        setTotalPages(Math.ceil(count / ITEMS_PER_PAGE));
-      }
+    setDestinations(data || []);
+    if (count !== null) {
+      setTotalPages(Math.ceil(count / ITEMS_PER_PAGE));
     }
     if (showLoading) setLoading(false);
   };
@@ -282,6 +301,9 @@ export default function DestinationsPage() {
               </div>
               <div className="p-4 grid gap-4">
                 <CardHeader className="p-0">
+                  <p className="text-sm font-semibold text-[#2D2D2D]/70">
+                    No. {destination.order_index ?? 0}
+                  </p>
                   <CardTitle className="text-xl line-clamp-1 text-[#2D2D2D]">
                     {destination.name}
                   </CardTitle>

@@ -63,45 +63,109 @@ export default function PackagesPage() {
     const from = (page - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
-    let query = supabase
-      .from("packages")
-      .select("*", { count: "exact" })
-      .order("title", { ascending: true });
+    let base = supabase.from("packages").select("*", { count: "exact" });
 
-    if (statusFilter) {
-      query = query.eq("is_featured", statusFilter === "featured");
+    // Try ordering by order_index first; fallback to title if column missing
+    let data: any[] | null = null;
+    let count: number | null = null;
+    {
+      let q = base;
+      if (statusFilter) {
+        q = q.eq("is_featured", statusFilter === "featured");
+      }
+      const res = await q
+        .order("order_index", { ascending: true, nullsFirst: false })
+        .order("title", { ascending: true })
+        .range(from, to);
+      if (res.error && /order_index/i.test(res.error.message || "")) {
+        let q2 = base;
+        if (statusFilter) {
+          q2 = q2.eq("is_featured", statusFilter === "featured");
+        }
+        const res2 = await q2
+          .order("title", { ascending: true })
+          .range(from, to);
+        data = res2.data || [];
+        count = res2.count ?? null;
+      } else if (res.error) {
+        toast.error("Failed to load packages");
+        console.error(res.error);
+        if (showLoading) setLoading(false);
+        return;
+      } else {
+        data = res.data || [];
+        count = res.count ?? null;
+      }
     }
 
-    const { data, count, error } = await query.range(from, to);
-
-    if (error) {
-      toast.error("Failed to load packages");
-      console.error(error);
-    } else {
+    {
       const pkgList = data || [];
-      const destIds = Array.from(
-        new Set(
-          pkgList
-            .map((p: any) => p.destination_id)
-            .filter((id: string | null | undefined) => !!id)
-        )
-      );
 
-      let destNameMap: Record<string, string> = {};
-      if (destIds.length > 0) {
-        const { data: dests } = await supabase
-          .from("destinations")
-          .select("id, name")
-          .in("id", destIds);
-        (dests || []).forEach((d) => {
-          destNameMap[d.id] = d.name;
-        });
+      // Build multi-destination names if mapping table exists; fallback to single
+      let packageDestNames: Record<string, string[]> = {};
+      try {
+        const pkgIds = pkgList.map((p: any) => p.id).filter(Boolean);
+        if (pkgIds.length) {
+          const { data: mappings } = await supabase
+            .from("package_destinations")
+            .select("package_id,destination_id")
+            .in("package_id", pkgIds);
+          const destIds = Array.from(
+            new Set(
+              (mappings || [])
+                .map((m: any) => m.destination_id)
+                .filter(Boolean),
+            ),
+          );
+          let nameMap: Record<string, string> = {};
+          if (destIds.length) {
+            const { data: dests } = await supabase
+              .from("destinations")
+              .select("id,name")
+              .in("id", destIds);
+            (dests || []).forEach((d) => (nameMap[d.id] = d.name));
+          }
+          (mappings || []).forEach((m: any) => {
+            const n = nameMap[m.destination_id];
+            if (!n) return;
+            if (!packageDestNames[m.package_id])
+              packageDestNames[m.package_id] = [];
+            packageDestNames[m.package_id].push(n);
+          });
+        }
+      } catch (_e) {
+        // If table not found or RLS blocks, fall back below
       }
 
-      const enriched = pkgList.map((p: any) => ({
-        ...p,
-        destination: p.destination || destNameMap[p.destination_id] || "",
-      }));
+      // Fallback map for single destination_id to name
+      let destNameMap: Record<string, string> = {};
+      if (Object.keys(packageDestNames).length === 0) {
+        const destIds = Array.from(
+          new Set(
+            pkgList
+              .map((p: any) => p.destination_id)
+              .filter((id: string | null | undefined) => !!id),
+          ),
+        );
+        if (destIds.length > 0) {
+          const { data: dests } = await supabase
+            .from("destinations")
+            .select("id, name")
+            .in("id", destIds);
+          (dests || []).forEach((d) => {
+            destNameMap[d.id] = d.name;
+          });
+        }
+      }
+
+      const enriched = pkgList.map((p: any) => {
+        const multi = packageDestNames[p.id];
+        const joined =
+          multi && multi.length > 0
+            ? multi.join(", ")
+            : p.destination || destNameMap[p.destination_id] || "";
+        return { ...p, destination: joined };
+      });
 
       setPackages(enriched as any);
       if (count !== null) {
@@ -301,13 +365,16 @@ export default function PackagesPage() {
                   </DropdownMenu>
                 </div>
               </div>
-              <div className="p-4 grid gap-4 flex-1">
+              <div className="p-4 grid grid-rows-[auto_1fr] gap-4 flex-1">
                 <CardHeader className="p-0">
+                  <p className="text-sm font-semibold text-[#2D2D2D]/70">
+                    No. {pkg.order_index ?? 0}
+                  </p>
                   <CardTitle className="text-xl line-clamp-1 text-[#2D2D2D]">
                     {pkg.title}
                   </CardTitle>
-                  <CardDescription className="line-clamp-1 font-mono text-xs text-[#2D2D2D]/70 flex items-center gap-1">
-                    <MapPin className="h-3 w-3" /> {pkg.destination}
+                  <CardDescription className="line-clamp-1 font-mono text-xs text-[#2D2D2D]/70 flex gap-1">
+                    <MapPin className="h-3 w-3 mt-0.5" /> {pkg.destination}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 p-0 space-y-2">
