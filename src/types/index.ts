@@ -25,8 +25,10 @@ export interface Package {
   description: string;
   price: number;
   duration_days: number;
+  package_date: string;
   image_urls: string[];
   is_featured: boolean;
+  is_active: boolean;
   timeline: {
     date: string;
     title: string;

@@ -20,6 +20,7 @@ import {
   Clock,
   Package as PackageIcon,
   Filter,
+  Calendar,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -364,6 +365,17 @@ export default function PackagesPage() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
+
+                <div className="absolute bottom-2 left-2">
+                  <Badge
+                    variant={pkg.is_active ? "default" : "destructive"}
+                    className={
+                      pkg.is_active ? "bg-green-600" : "bg-red-600 text-white"
+                    }
+                  >
+                    {pkg.is_active ? "Published" : "Draft"}
+                  </Badge>
+                </div>
               </div>
               <div className="p-4 grid grid-rows-[auto_1fr] gap-4 flex-1">
                 <CardHeader className="p-0">
@@ -373,9 +385,17 @@ export default function PackagesPage() {
                   <CardTitle className="text-xl line-clamp-1 text-[#2D2D2D]">
                     {pkg.title}
                   </CardTitle>
-                  <CardDescription className="line-clamp-1 font-mono text-xs text-[#2D2D2D]/70 flex gap-1">
-                    <MapPin className="h-3 w-3 mt-0.5" /> {pkg.destination}
-                  </CardDescription>
+                  <div className="flex justify-between items-center">
+                    <CardDescription className="line-clamp-1 font-mono text-xs text-[#2D2D2D]/70 flex gap-1">
+                      <MapPin className="h-3 w-3 mt-0.5" /> {pkg.destination}
+                    </CardDescription>
+                    {pkg.package_date && (
+                      <CardDescription className="line-clamp-1 font-mono text-xs text-[#2D2D2D]/70 flex gap-1">
+                        <Calendar className="h-3 w-3 mt-0.5" />{" "}
+                        {pkg.package_date}
+                      </CardDescription>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="flex-1 p-0 space-y-2">
                   <div className="flex items-center justify-between text-sm text-[#2D2D2D]/80">

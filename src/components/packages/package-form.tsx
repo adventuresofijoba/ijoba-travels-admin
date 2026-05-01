@@ -50,8 +50,10 @@ const packageSchema = z.object({
   description: z.string().optional(),
   price: z.coerce.number().min(0, "Price must be positive"),
   duration_days: z.coerce.number().min(1, "Duration must be at least 1 day"),
+  package_date: z.string().optional(),
   image_urls: z.array(z.string()).optional(),
   is_featured: z.boolean().default(false),
+  is_active: z.boolean().default(false),
   timeline: z
     .array(
       z.object({
@@ -151,8 +153,10 @@ export function PackageForm({
       description: defaultValues?.description || "",
       price: defaultValues?.price || 0,
       duration_days: defaultValues?.duration_days || 1,
+      package_date: defaultValues?.package_date || "",
       image_urls: defaultValues?.image_urls || [],
       is_featured: defaultValues?.is_featured || false,
+      is_active: defaultValues?.is_active || false,
       timeline: defaultValues?.timeline || [],
       features: defaultValues?.features || [],
     },
@@ -238,8 +242,10 @@ export function PackageForm({
         description: data.description,
         price: data.price,
         duration_days: data.duration_days,
+        package_date: data.package_date,
         image_urls: imageUrls,
         is_featured: data.is_featured,
+        is_active: data.is_active,
         timeline: data.timeline,
         features: data.features,
       };
@@ -252,7 +258,10 @@ export function PackageForm({
       }
       basePayload.destination_id = selectedIds[0];
       // Ensure order_index is a clean number or null
-      if (typeof data.order_index === "number" && !Number.isNaN(data.order_index)) {
+      if (
+        typeof data.order_index === "number" &&
+        !Number.isNaN(data.order_index)
+      ) {
         basePayload.order_index = data.order_index;
       } else {
         basePayload.order_index = null;
@@ -476,6 +485,20 @@ export function PackageForm({
 
           <FormField
             control={form.control}
+            name="package_date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Package Date</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. 2023-12-31" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="description"
             render={({ field }) => (
               <FormItem>
@@ -696,6 +719,25 @@ export function PackageForm({
               </div>
             ))}
           </div>
+
+          <FormField
+            control={form.control}
+            name="is_active"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border border-black/10 p-3">
+                <div className="m-0">
+                  <FormLabel>Active Status</FormLabel>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    className="m-0"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}
