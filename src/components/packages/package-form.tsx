@@ -28,16 +28,12 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
-import { Destination } from "@/types";
 import { Trash2, Plus } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
 
 const packageSchema = z.object({
   title: z.string().min(2, "Title must be at least 2 characters"),
   slug: z.string().min(2, "Slug must be at least 2 characters"),
-  destination_ids: z
-    .array(z.string())
-    .min(1, "Select at least one destination"),
+  destination: z.string().min(1, "Destination is required"),
   order_index: z
     .union([z.number(), z.string(), z.undefined(), z.null()])
     .optional()
@@ -87,18 +83,11 @@ export function PackageForm({
   id,
 }: PackageFormProps) {
   const [loading, setLoading] = useState(false);
-  const [destinations, setDestinations] = useState<Destination[]>([]);
   const [highestOrder, setHighestOrder] = useState<number | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   useEffect(() => {
-    async function fetchData() {
-      const { data } = await supabase
-        .from("destinations")
-        .select("*")
-        .order("name");
-      setDestinations(data || []);
-
+    async function fetchMaxOrder() {
       const { data: maxOrder } = await supabase
         .from("packages")
         .select("order_index")
@@ -108,44 +97,15 @@ export function PackageForm({
         setHighestOrder(maxOrder[0].order_index);
       }
     }
-    fetchData();
+    fetchMaxOrder();
   }, []);
-
-  useEffect(() => {
-    async function fetchExistingMappings() {
-      if (!id) return;
-      try {
-        const { data, error } = await supabase
-          .from("package_destinations")
-          .select("destination_id")
-          .eq("package_id", id);
-        if (!error && Array.isArray(data)) {
-          const ids = data
-            .map((row: any) => row.destination_id)
-            .filter(Boolean);
-          if (ids.length > 0) {
-            form.setValue("destination_ids", ids);
-          }
-        }
-      } catch (_e) {
-        // ignore if mapping table doesn't exist
-      }
-    }
-    fetchExistingMappings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
 
   const form = useForm<PackageFormValues>({
     resolver: zodResolver(packageSchema) as any,
     defaultValues: {
       title: defaultValues?.title || "",
       slug: defaultValues?.slug || "",
-      destination_ids: Array.isArray((defaultValues as any)?.destination_ids)
-        ? ((defaultValues as any)?.destination_ids as string[])
-        : typeof (defaultValues as any)?.destination_id === "string" &&
-            (defaultValues as any)?.destination_id.length > 0
-          ? [(defaultValues as any)?.destination_id as string]
-          : [],
+      destination: (defaultValues as any)?.destination || "",
       order_index:
         typeof (defaultValues as any)?.order_index === "number"
           ? ((defaultValues as any)?.order_index as number)
@@ -239,6 +199,7 @@ export function PackageForm({
       const basePayload: any = {
         title: data.title,
         slug: data.slug,
+        destination: data.destination,
         description: data.description,
         price: data.price,
         duration_days: data.duration_days,
@@ -250,13 +211,6 @@ export function PackageForm({
         features: data.features,
       };
 
-      const selectedIds = data.destination_ids || [];
-      if (!selectedIds.length) {
-        toast.error("Please select at least one destination");
-        setLoading(false);
-        return;
-      }
-      basePayload.destination_id = selectedIds[0];
       // Ensure order_index is a clean number or null
       if (
         typeof data.order_index === "number" &&
@@ -273,10 +227,22 @@ export function PackageForm({
           .update(basePayload)
           .eq("id", id);
         if (upd.error) {
-          // Retry if order_index column is missing
-          if (/order_index/i.test(upd.error.message || "")) {
+          // Retry if order_index or package_date or destination column is missing
+          if (
+            /order_index/i.test(upd.error.message || "") ||
+            /package_date/i.test(upd.error.message || "") ||
+            /destination/i.test(upd.error.message || "")
+          ) {
             const retryPayload = { ...basePayload };
-            delete retryPayload.order_index;
+            if (/order_index/i.test(upd.error.message || "")) {
+              delete retryPayload.order_index;
+            }
+            if (/package_date/i.test(upd.error.message || "")) {
+              delete retryPayload.package_date;
+            }
+            if (/destination/i.test(upd.error.message || "")) {
+              delete retryPayload.destination;
+            }
             upd = await supabase
               .from("packages")
               .update(retryPayload)
@@ -286,19 +252,6 @@ export function PackageForm({
             throw upd.error;
           }
         }
-        try {
-          await supabase
-            .from("package_destinations")
-            .delete()
-            .eq("package_id", id);
-          const rows = selectedIds.map((destId) => ({
-            package_id: id,
-            destination_id: destId,
-          }));
-          if (rows.length) {
-            await supabase.from("package_destinations").insert(rows);
-          }
-        } catch (_e) {}
         toast.success("Package updated successfully");
       } else {
         let inserted: any = null;
@@ -309,10 +262,22 @@ export function PackageForm({
           .single();
 
         if (ins.error) {
-          // Retry if order_index column is missing
-          if (/order_index/i.test(ins.error.message || "")) {
+          // Retry if order_index or package_date or destination column is missing
+          if (
+            /order_index/i.test(ins.error.message || "") ||
+            /package_date/i.test(ins.error.message || "") ||
+            /destination/i.test(ins.error.message || "")
+          ) {
             const retryPayload = { ...basePayload };
-            delete retryPayload.order_index;
+            if (/order_index/i.test(ins.error.message || "")) {
+              delete retryPayload.order_index;
+            }
+            if (/package_date/i.test(ins.error.message || "")) {
+              delete retryPayload.package_date;
+            }
+            if (/destination/i.test(ins.error.message || "")) {
+              delete retryPayload.destination;
+            }
             ins = await supabase
               .from("packages")
               .insert([retryPayload])
@@ -325,18 +290,6 @@ export function PackageForm({
           }
         } else {
           inserted = ins.data;
-        }
-        const newId = inserted?.id;
-        if (newId) {
-          try {
-            const rows = selectedIds.map((destId) => ({
-              package_id: newId,
-              destination_id: destId,
-            }));
-            if (rows.length) {
-              await supabase.from("package_destinations").insert(rows);
-            }
-          } catch (_e) {}
         }
         toast.success("Package created successfully");
       }
@@ -417,38 +370,13 @@ export function PackageForm({
 
           <FormField
             control={form.control}
-            name="destination_ids"
-            render={() => (
+            name="destination"
+            render={({ field }) => (
               <FormItem>
-                <FormLabel>Destinations</FormLabel>
-                <div className="grid gap-2">
-                  {destinations.map((d) => {
-                    const selected = (
-                      form.getValues("destination_ids") || []
-                    ).includes(d.id);
-                    return (
-                      <label key={d.id} className="flex items-center gap-2">
-                        <Checkbox
-                          checked={selected}
-                          onChange={(e) => {
-                            const checked = (e.target as HTMLInputElement)
-                              .checked;
-                            const current = new Set(
-                              form.getValues("destination_ids") || [],
-                            );
-                            if (checked) current.add(d.id);
-                            else current.delete(d.id);
-                            form.setValue(
-                              "destination_ids",
-                              Array.from(current),
-                            );
-                          }}
-                        />
-                        <span>{d.name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                <FormLabel>Destination</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. Kyoto, Japan" {...field} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

@@ -102,53 +102,18 @@ export default function PackagesPage() {
     {
       const pkgList = data || [];
 
-      // Build multi-destination names if mapping table exists; fallback to single
-      let packageDestNames: Record<string, string[]> = {};
-      try {
-        const pkgIds = pkgList.map((p: any) => p.id).filter(Boolean);
-        if (pkgIds.length) {
-          const { data: mappings } = await supabase
-            .from("package_destinations")
-            .select("package_id,destination_id")
-            .in("package_id", pkgIds);
-          const destIds = Array.from(
-            new Set(
-              (mappings || [])
-                .map((m: any) => m.destination_id)
-                .filter(Boolean),
-            ),
-          );
-          let nameMap: Record<string, string> = {};
-          if (destIds.length) {
-            const { data: dests } = await supabase
-              .from("destinations")
-              .select("id,name")
-              .in("id", destIds);
-            (dests || []).forEach((d) => (nameMap[d.id] = d.name));
-          }
-          (mappings || []).forEach((m: any) => {
-            const n = nameMap[m.destination_id];
-            if (!n) return;
-            if (!packageDestNames[m.package_id])
-              packageDestNames[m.package_id] = [];
-            packageDestNames[m.package_id].push(n);
-          });
-        }
-      } catch (_e) {
-        // If table not found or RLS blocks, fall back below
-      }
-
-      // Fallback map for single destination_id to name
+      // Map for single destination_id to name (legacy fallback)
       let destNameMap: Record<string, string> = {};
-      if (Object.keys(packageDestNames).length === 0) {
-        const destIds = Array.from(
-          new Set(
-            pkgList
-              .map((p: any) => p.destination_id)
-              .filter((id: string | null | undefined) => !!id),
-          ),
-        );
-        if (destIds.length > 0) {
+      const destIds = Array.from(
+        new Set(
+          pkgList
+            .filter((p: any) => !p.destination && p.destination_id)
+            .map((p: any) => p.destination_id),
+        ),
+      );
+
+      if (destIds.length > 0) {
+        try {
           const { data: dests } = await supabase
             .from("destinations")
             .select("id, name")
@@ -156,17 +121,16 @@ export default function PackagesPage() {
           (dests || []).forEach((d) => {
             destNameMap[d.id] = d.name;
           });
+        } catch (e) {
+          console.error("Error fetching legacy destination names:", e);
         }
       }
 
-      const enriched = pkgList.map((p: any) => {
-        const multi = packageDestNames[p.id];
-        const joined =
-          multi && multi.length > 0
-            ? multi.join(", ")
-            : p.destination || destNameMap[p.destination_id] || "";
-        return { ...p, destination: joined };
-      });
+      const enriched = pkgList.map((p: any) => ({
+        ...p,
+        destination:
+          p.destination || destNameMap[p.destination_id] || "No Destination",
+      }));
 
       setPackages(enriched as any);
       if (count !== null) {
@@ -385,15 +349,18 @@ export default function PackagesPage() {
                   <CardTitle className="text-xl line-clamp-1 text-[#2D2D2D]">
                     {pkg.title}
                   </CardTitle>
-                  <div className="flex justify-between items-center">
-                    <CardDescription className="line-clamp-1 font-mono text-xs text-[#2D2D2D]/70 flex gap-1">
-                      <MapPin className="h-3 w-3 mt-0.5" /> {pkg.destination}
-                    </CardDescription>
+                  <div className="grid grid-flow-col gap-3 justify-between items-center">
+                    <span className="text-xs grid gap-1 grid-flow-col justify-start items-start text-[#2D2D2D]/70">
+                      <MapPin size={14} className="mt-px" />
+                      <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+                        {pkg.destination}
+                      </span>
+                    </span>
                     {pkg.package_date && (
-                      <CardDescription className="line-clamp-1 font-mono text-xs text-[#2D2D2D]/70 flex gap-1">
-                        <Calendar className="h-3 w-3 mt-0.5" />{" "}
+                      <span className="text-xs grid grid-flow-col items-start gap-1 text-[#2D2D2D]/70">
+                        <Calendar size={14} className="mt-px" />{" "}
                         {pkg.package_date}
-                      </CardDescription>
+                      </span>
                     )}
                   </div>
                 </CardHeader>
