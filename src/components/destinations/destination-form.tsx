@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
@@ -28,7 +29,10 @@ import Link from "next/link";
 const destinationSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   slug: z.string().min(2, "Slug must be at least 2 characters"),
-  description: z.string().optional(),
+  description: z
+    .string()
+    .max(750, "Description must be less than 750 characters")
+    .optional(),
   order_index: z
     .union([z.number(), z.string(), z.undefined(), z.null()])
     .optional()
@@ -448,19 +452,46 @@ export function DestinationForm({
           <FormField
             control={form.control}
             name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Description</FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="Why visit this place?"
-                    className="min-h-37.5"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const charCount = field.value?.length || 0;
+              const isOverLimit = charCount > 750;
+              const isNearLimit = charCount > 700;
+
+              return (
+                <FormItem>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Description</FormLabel>
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium transition-colors",
+                        isOverLimit
+                          ? "text-red-500 font-bold"
+                          : isNearLimit
+                            ? "text-yellow-600"
+                            : "text-muted-foreground",
+                      )}
+                    >
+                      {charCount}/750 characters used
+                    </span>
+                  </div>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Why visit this place?"
+                      className={cn(
+                        "min-h-37.5 transition-all duration-200",
+                        isOverLimit &&
+                          "border-red-500 focus-visible:ring-red-500",
+                        isNearLimit &&
+                          !isOverLimit &&
+                          "border-yellow-600 focus-visible:ring-yellow-600",
+                      )}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
 
           <div className="grid gap-3">
