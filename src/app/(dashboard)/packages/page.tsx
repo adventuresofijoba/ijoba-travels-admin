@@ -21,6 +21,7 @@ import {
   Package as PackageIcon,
   Filter,
   Calendar,
+  Plane,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -297,6 +298,7 @@ export default function PackagesPage() {
                     </Badge>
                   </div>
                 )}
+
                 <div className="absolute top-2 right-2">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -343,9 +345,16 @@ export default function PackagesPage() {
               </div>
               <div className="p-4 grid grid-rows-[auto_1fr] gap-4 flex-1">
                 <CardHeader className="p-0">
-                  <p className="text-sm font-semibold text-[#2D2D2D]/70">
-                    No. {pkg.order_index ?? 0}
-                  </p>
+                  <div className="flex items-center justify-between text-sm font-semibold text-[#2D2D2D]/70">
+                    <p className="">No. {pkg.order_index ?? 0}</p>
+
+                    {pkg.is_flight_inclusive && (
+                      <div className="flex items-center gap-2 text-[#2D2D2D]/70">
+                        <Plane className="w-4" />
+                        Flight Inclusive
+                      </div>
+                    )}
+                  </div>
                   <CardTitle className="text-xl line-clamp-1 text-[#2D2D2D]">
                     {pkg.title}
                   </CardTitle>

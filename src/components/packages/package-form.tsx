@@ -49,6 +49,7 @@ const packageSchema = z.object({
   package_date: z.string().optional(),
   image_urls: z.array(z.string()).optional(),
   is_featured: z.boolean().default(false),
+  is_flight_inclusive: z.boolean().default(false),
   is_active: z.boolean().default(false),
   timeline: z
     .array(
@@ -116,6 +117,7 @@ export function PackageForm({
       package_date: defaultValues?.package_date || "",
       image_urls: defaultValues?.image_urls || [],
       is_featured: defaultValues?.is_featured || false,
+      is_flight_inclusive: defaultValues?.is_flight_inclusive || false,
       is_active: defaultValues?.is_active || false,
       timeline: defaultValues?.timeline || [],
       features: defaultValues?.features || [],
@@ -206,6 +208,7 @@ export function PackageForm({
         package_date: data.package_date,
         image_urls: imageUrls,
         is_featured: data.is_featured,
+        is_flight_inclusive: data.is_flight_inclusive,
         is_active: data.is_active,
         timeline: data.timeline,
         features: data.features,
@@ -673,6 +676,23 @@ export function PackageForm({
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between rounded-lg border border-black/10 p-3">
                 <FormLabel className="m-0">Featured Package</FormLabel>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    className="m-0"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="is_flight_inclusive"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border border-black/10 p-3">
+                <FormLabel className="m-0">Flight Inclusive</FormLabel>
                 <FormControl>
                   <Switch
                     checked={field.value}

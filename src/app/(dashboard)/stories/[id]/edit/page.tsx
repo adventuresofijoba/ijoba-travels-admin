@@ -69,6 +69,7 @@ export default function EditStoryPage() {
             author_name: story.author_name,
             content: story.content,
             cover_image: story.cover_image || undefined,
+            recommended_packages: story.recommended_packages ?? [],
             is_published: story.is_published,
           }}
           onSuccess={() => router.push("/stories")}

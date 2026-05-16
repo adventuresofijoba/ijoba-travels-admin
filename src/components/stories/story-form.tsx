@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import Link from "next/link";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
+import { Checkbox } from "../ui/checkbox";
 
 const storySchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
@@ -31,6 +32,7 @@ const storySchema = z.object({
     .optional()
     .or(z.literal("")),
   content: z.string().min(20, "Content must be at least 20 characters"),
+  recommended_packages: z.array(z.string()).optional(),
   is_published: z.boolean().default(false),
 });
 
@@ -42,10 +44,16 @@ interface StoryFormProps {
   id?: string;
 }
 
+interface PackageOption {
+  id: string;
+  title: string;
+}
+
 export function StoryForm({ onSuccess, defaultValues, id }: StoryFormProps) {
   const [loading, setLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [notifySubscribers, setNotifySubscribers] = useState(false);
+  const [packages, setPackages] = useState<PackageOption[]>([]);
 
   const form = useForm<StoryFormValues>({
     resolver: zodResolver(storySchema) as any,
@@ -55,21 +63,12 @@ export function StoryForm({ onSuccess, defaultValues, id }: StoryFormProps) {
       author_name: "",
       cover_image: "",
       content: "",
+      recommended_packages: [],
       is_published: false,
     },
   });
 
   const title = form.watch("title");
-
-  useEffect(() => {
-    if (title && !defaultValues?.slug) {
-      const slug = title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)+/g, "");
-      form.setValue("slug", slug, { shouldValidate: true });
-    }
-  }, [title, form, defaultValues]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -145,6 +144,42 @@ export function StoryForm({ onSuccess, defaultValues, id }: StoryFormProps) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    async function fetchPackages() {
+      const { data, error } = await supabase
+        .from("packages")
+        .select("id, title")
+        .order("title");
+
+      if (error) console.error("Error fetching packages:", error);
+      else setPackages(data || []);
+    }
+    fetchPackages();
+  }, []);
+
+  useEffect(() => {
+    if (defaultValues && packages.length > 0) {
+      console.log(
+        "recommended_packages from DB:",
+        defaultValues.recommended_packages,
+      );
+      form.reset({
+        ...defaultValues,
+        recommended_packages: defaultValues.recommended_packages ?? [],
+      });
+    }
+  }, [defaultValues, packages]); // 👈 depends on both
+
+  useEffect(() => {
+    if (title && !defaultValues?.slug) {
+      const slug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)+/g, "");
+      form.setValue("slug", slug, { shouldValidate: true });
+    }
+  }, [title, form, defaultValues]);
 
   return (
     <Form {...form}>
@@ -244,6 +279,67 @@ export function StoryForm({ onSuccess, defaultValues, id }: StoryFormProps) {
                     onImageUpload={uploadImage}
                   />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="recommended_packages"
+            render={() => (
+              <FormItem>
+                <div className="mb-4">
+                  <FormLabel className="text-base">
+                    Recommended Packages
+                  </FormLabel>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-black/10 rounded-md p-4 max-h-60 overflow-y-auto">
+                  {packages.map((pkg) => (
+                    <FormField
+                      key={pkg.id}
+                      control={form.control}
+                      name="recommended_packages"
+                      render={({ field }) => {
+                        console.log(field.value);
+                        return (
+                          <FormItem
+                            key={pkg.id}
+                            className="flex flex-row items-start space-x-3 space-y-0"
+                          >
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value?.includes(pkg.id)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  return checked
+                                    ? field.onChange([
+                                        ...(field.value || []),
+                                        pkg.id,
+                                      ])
+                                    : field.onChange(
+                                        field.value?.filter(
+                                          (value) => value !== pkg.id,
+                                        ),
+                                      );
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal cursor-pointer">
+                              {pkg.title}
+                            </FormLabel>
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  ))}
+                  {packages.length === 0 && (
+                    <p className="text-sm text-muted-foreground col-span-2">
+                      No packages found. Create packages first to recommend
+                      them.
+                    </p>
+                  )}
+                </div>
                 <FormMessage />
               </FormItem>
             )}

@@ -696,7 +696,7 @@ export function DestinationForm({
                 <FormControl>
                   <Textarea
                     placeholder="What makes this destination special?"
-                    className="min-h-[150px]"
+                    className="min-h-37.5"
                     {...field}
                   />
                 </FormControl>
