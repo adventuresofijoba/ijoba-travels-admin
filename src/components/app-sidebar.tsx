@@ -8,6 +8,7 @@ import {
   BookOpen,
   FileText,
   LogOut,
+  MessageSquareQuote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
@@ -39,6 +40,11 @@ const sidebarItems = [
     title: "Stories & Tips",
     href: "/stories",
     icon: BookOpen,
+  },
+  {
+    title: "Testimonials",
+    href: "/testimonials",
+    icon: MessageSquareQuote,
   },
 ];
 
